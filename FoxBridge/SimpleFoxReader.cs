@@ -98,5 +98,69 @@ namespace FoxBridge
                 return table;
             }
         }
+
+        public void WriteDBF(DataTable table, string filepath)
+        {
+            const int fieldLength = 254;
+            int headerLength = 32 + (table.Columns.Count * 32) + 1;
+            int recordLength = 1 + (table.Columns.Count * fieldLength);
+            DateTime now = DateTime.Now;
+            Encoding encoding = Encoding.GetEncoding(1252);
+
+            string directory = Path.GetDirectoryName(Path.GetFullPath(filepath));
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            using (var fs = new FileStream(filepath, FileMode.Create, FileAccess.Write, FileShare.Read))
+            using (var bw = new BinaryWriter(fs, Encoding.ASCII))
+            {
+                bw.Write((byte)0x03);
+                bw.Write((byte)(now.Year - 1900));
+                bw.Write((byte)now.Month);
+                bw.Write((byte)now.Day);
+                bw.Write(table.Rows.Count);
+                bw.Write((short)headerLength);
+                bw.Write((short)recordLength);
+                bw.Write(new byte[20]);
+
+                foreach (DataColumn column in table.Columns)
+                {
+                    byte[] name = Encoding.ASCII.GetBytes(column.ColumnName ?? "");
+                    byte[] fieldName = new byte[11];
+                    Array.Copy(name, fieldName, Math.Min(name.Length, 10));
+                    bw.Write(fieldName);
+
+                    bw.Write((byte)'C');
+                    bw.Write(new byte[4]);
+                    bw.Write((byte)fieldLength);
+                    bw.Write((byte)0);
+                    bw.Write(new byte[14]);
+                }
+
+                bw.Write((byte)0x0D);
+
+                foreach (DataRow row in table.Rows)
+                {
+                    bw.Write((byte)0x20);
+
+                    foreach (DataColumn column in table.Columns)
+                    {
+                        string value = row[column] == DBNull.Value ? "" : row[column].ToString();
+                        byte[] valueBytes = encoding.GetBytes(value);
+                        int bytesToWrite = Math.Min(valueBytes.Length, fieldLength);
+                        bw.Write(valueBytes, 0, bytesToWrite);
+
+                        if (bytesToWrite < fieldLength)
+                        {
+                            bw.Write(encoding.GetBytes(new string(' ', fieldLength - bytesToWrite)));
+                        }
+                    }
+                }
+
+                bw.Write((byte)0x1A);
+            }
+        }
     }
 }
