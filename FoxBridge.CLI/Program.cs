@@ -20,6 +20,8 @@ namespace FoxBridge.CLI
                 if (args.Length < 1)
                 {
                     Console.WriteLine("Usage: FoxBridge.exe <filename_or_path> [target_table]");
+                    Console.WriteLine("       FoxBridge.exe --xml <xml-output>");
+                    Console.WriteLine("       FoxBridge.exe --fox <filename_or_path>");
                     return 1;
                 }
 
@@ -29,6 +31,73 @@ namespace FoxBridge.CLI
                 string useCustomPathStr = ConfigurationManager.AppSettings["UseCustomPath"] ?? "true";
                 bool useCustomPath = bool.TryParse(useCustomPathStr, out bool res) ? res : true;
                 string stagingSuffix = ConfigurationManager.AppSettings["StagingSuffix"] ?? "_stg";
+
+                if (args[0].Equals("--fox", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (args.Length != 2)
+                    {
+                        Console.WriteLine("Usage: FoxBridge.exe --fox <filename_or_path>");
+                        return 1;
+                    }
+
+                    string outputDirectory = ConfigurationManager.AppSettings["XML_output"] ?? basePath;
+                    if (string.IsNullOrWhiteSpace(outputDirectory))
+                    {
+                        outputDirectory = AppDomain.CurrentDomain.BaseDirectory;
+                    }
+
+                    string outputName = Path.GetFileNameWithoutExtension(args[1]);
+                    if (string.IsNullOrWhiteSpace(outputName))
+                    {
+                        throw new ArgumentException("The FoxPro input must contain a file name.", nameof(args));
+                    }
+
+                    string sqlPath = Path.Combine(basePath, "FoxProXmlQuery.txt");
+                    if (!File.Exists(sqlPath))
+                    {
+                        sqlPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "FoxProXmlQuery.txt");
+                    }
+
+                    string foxDbfPath = Path.Combine(outputDirectory, $"UPS_{outputName}.dbf");
+                    var importer = new FoxImporter();
+                    importer.FoxCommand(sqlPath, basePath, foxDbfPath);
+                   // int rowsExported = importer.ExportQueryToFox(basePath, sqlPath, foxDbfPath);
+                    //Console.WriteLine($"✔ EXPORTED: {rowsExported} records from FoxPro SQL to '{foxDbfPath}'.");
+                    return 0;
+                }
+
+                if (args[0].Equals("--xml", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (args.Length != 2)
+                    {
+                        Console.WriteLine("Usage: FoxBridge.exe --xml <xml-output>");
+                        return 1;
+                    }
+
+                    string xmlOutputDirectory = ConfigurationManager.AppSettings["XML_output"] ?? basePath;
+                    if (string.IsNullOrWhiteSpace(xmlOutputDirectory))
+                    {
+                        xmlOutputDirectory = AppDomain.CurrentDomain.BaseDirectory;
+                    }
+
+                    string outputFileName = Path.GetFileName(args[1]);
+                    if (string.IsNullOrWhiteSpace(outputFileName) || !args[1].Equals(outputFileName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new ArgumentException("The XML output argument must be a file name, not a path.", nameof(args));
+                    }
+
+                    string sqlPath = Path.Combine(basePath, "FoxProXmlQuery.txt");
+                    if (!File.Exists(sqlPath))
+                    {
+                        sqlPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "FoxProXmlQuery.txt");
+                    }
+
+                    string xmlPath = Path.Combine(xmlOutputDirectory, outputFileName);
+                    var importer = new FoxImporter();
+                    int rowsExported = importer.ExportQueryToXml(basePath, sqlPath, xmlPath);
+                    Console.WriteLine($"✔ EXPORTED: {rowsExported} records from FoxPro SQL to '{xmlPath}' with schema.");
+                    return 0;
+                }
 
                 string minRowsStr = ConfigurationManager.AppSettings["MinRowsToSwap"] ?? "0";
                 int minRowsToSwap = int.TryParse(minRowsStr, out int mr) ? mr : 0;
